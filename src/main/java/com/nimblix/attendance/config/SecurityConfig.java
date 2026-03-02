@@ -103,7 +103,8 @@ public class SecurityConfig {
 				"http://localhost:3000",
 				"http://127.0.0.1:5173",
 				"http://127.0.0.1:3000",
-				"https://attendance-nimblix-production.up.railway.app"));
+				"https://attendance-nimblix-production.up.railway.app",
+				"https://nimblix.netlify.app"));
 
 		// ✅ Allow all standard HTTP methods
 		config.setAllowedMethods(List.of(
