@@ -54,10 +54,11 @@ public class SecurityConfig {
 								"/api/auth/**",
 								"/v3/api-docs/**",
 								"/swagger-ui/**",
-								"/swagger-ui.html"
-						).permitAll()
+								"/swagger-ui.html")
+						.permitAll()
 
-						// ✅ Actuator (Admin Only)
+						// ✅ Actuator health is public (Railway health checks), rest is admin-only
+						.requestMatchers("/actuator/health").permitAll()
 						.requestMatchers("/actuator/**").hasRole("ADMIN")
 
 						// ✅ Admin APIs
@@ -67,8 +68,7 @@ public class SecurityConfig {
 						.requestMatchers("/api/employee/**").hasAnyRole("EMPLOYEE", "ADMIN")
 
 						// ✅ Everything else requires authentication
-						.anyRequest().authenticated()
-				)
+						.anyRequest().authenticated())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
@@ -97,11 +97,13 @@ public class SecurityConfig {
 
 		CorsConfiguration config = new CorsConfiguration();
 
-		// ✅ Allow React frontend (development)
+		// ✅ Allow React frontend (development + production)
 		config.setAllowedOrigins(List.of(
 				"http://localhost:5173",
-				"http://127.0.0.1:3000"
-		));
+				"http://localhost:3000",
+				"http://127.0.0.1:5173",
+				"http://127.0.0.1:3000",
+				"https://attendance-nimblix-production.up.railway.app"));
 
 		// ✅ Allow all standard HTTP methods
 		config.setAllowedMethods(List.of(
@@ -109,15 +111,10 @@ public class SecurityConfig {
 				"POST",
 				"PUT",
 				"DELETE",
-				"OPTIONS"
-		));
+				"OPTIONS"));
 
-		// ✅ Allow headers required for JWT + file upload
-		config.setAllowedHeaders(List.of(
-				"Authorization",
-				"Content-Type",
-				"Accept"
-		));
+		// ✅ Allow all headers (covers Authorization, Content-Type, Accept, etc.)
+		config.setAllowedHeaders(List.of("*"));
 
 		// ✅ Allow sending JWT token
 		config.setAllowCredentials(true);
