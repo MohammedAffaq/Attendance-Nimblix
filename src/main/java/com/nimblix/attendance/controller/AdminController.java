@@ -103,6 +103,16 @@ public class AdminController {
 	}
 
 	// ===============================
+	// DELETE EMPLOYEE (DELETE)
+	// ===============================
+	@PreAuthorize("hasRole('ADMIN')")
+	@DeleteMapping("/employees/{id}")
+	public ResponseEntity<?> deleteEmployee(@PathVariable Long id) {
+		userService.deleteEmployee(id);
+		return ResponseEntity.ok(java.util.Map.of("message", "Employee deleted successfully"));
+	}
+
+	// ===============================
 	// GET ALL EMPLOYEES (GET)
 	// ===============================
 	@PreAuthorize("hasRole('ADMIN')")

@@ -21,4 +21,6 @@ public interface UserService {
 	List<UserResponse> getAllEmployees();
 
 	Map<String, Object> bulkUploadEmployees(MultipartFile file);
+
+	void deleteEmployee(Long id);
 }

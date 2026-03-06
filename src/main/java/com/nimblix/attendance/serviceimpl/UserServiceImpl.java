@@ -24,6 +24,7 @@ import com.nimblix.attendance.entity.UpdateEmployeeRequest;
 import com.nimblix.attendance.entity.User;
 import com.nimblix.attendance.entity.UserResponse;
 import com.nimblix.attendance.exception.BadRequestException;
+import com.nimblix.attendance.repository.AttendanceRepository;
 import com.nimblix.attendance.repository.UserRepository;
 import com.nimblix.attendance.service.FileStorageService;
 import com.nimblix.attendance.service.UserService;
@@ -40,6 +41,7 @@ public class UserServiceImpl implements UserService {
 	private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
 
 	private final UserRepository userRepo;
+	private final AttendanceRepository attendanceRepo;
 	private final FileStorageService storage;
 	private final PasswordEncoder passwordEncoder;
 
@@ -150,21 +152,22 @@ public class UserServiceImpl implements UserService {
 					}
 
 					// ── Build user entity ─────────────────────────────
-					User user = new User();
-					user.setEmployeeId(employeeId);
-					user.setName(name);
-					user.setEmail(email);
-					user.setPassword(passwordEncoder.encode(password));
-					user.setRole(Role.EMPLOYEE);
-					user.setEnabled(true);
+					CreateEmployeeRequest req = new CreateEmployeeRequest();
+					req.setEmployeeId(employeeId);
+					req.setName(name);
+					req.setEmail(email);
+					req.setPassword(password);
+					req.setRole(Role.EMPLOYEE);
 
-					toSave.add(user);
-					successCount++;
+					log.info("Creating employee with email: {}", email);
 
-					// Batch save every 100 records to keep memory in check
-					if (toSave.size() == 100) {
-						userRepo.saveAll(toSave);
-						toSave.clear();
+					try {
+						createEmployee(req, null);
+						successCount++;
+					} catch (Exception ex) {
+						log.error("Error saving row {}: {}", rowNum, ex.getMessage());
+						errors.add("Row " + rowNum + ": Failed to save — " + ex.getMessage());
+						failCount++;
 					}
 
 				} catch (Exception ex) {
@@ -172,11 +175,6 @@ public class UserServiceImpl implements UserService {
 					errors.add("Row " + rowNum + ": Unexpected error — " + ex.getMessage());
 					failCount++;
 				}
-			}
-
-			// Save remaining batch
-			if (!toSave.isEmpty()) {
-				userRepo.saveAll(toSave);
 			}
 
 		} catch (IOException e) {
@@ -232,6 +230,17 @@ public class UserServiceImpl implements UserService {
 		}
 
 		userRepo.save(user);
+	}
+
+	// ============================
+	// DELETE EMPLOYEE
+	// ============================
+	@Transactional
+	@Override
+	public void deleteEmployee(Long id) {
+		User user = userRepo.findById(id).orElseThrow(() -> new BadRequestException("Employee not found"));
+		attendanceRepo.deleteByUserId(id);
+		userRepo.delete(user);
 	}
 
 	// ============================
@@ -294,15 +303,26 @@ public class UserServiceImpl implements UserService {
 	/** Safely reads a cell as a trimmed String regardless of cell type. */
 	private String getCellString(Row row, int col) {
 		Cell cell = row.getCell(col);
-		if (cell == null)
+		if (cell == null) {
 			return "";
-		return switch (cell.getCellType()) {
-			case STRING -> cell.getStringCellValue().trim();
-			case NUMERIC -> String.valueOf((long) cell.getNumericCellValue()).trim();
-			case BOOLEAN -> String.valueOf(cell.getBooleanCellValue()).trim();
-			case FORMULA -> cell.getCellFormula().trim();
-			default -> "";
-		};
+		}
+
+		CellType type = cell.getCellType();
+		if (type == CellType.FORMULA) {
+			type = cell.getCachedFormulaResultType();
+		}
+
+		if (type == CellType.NUMERIC) {
+			double val = cell.getNumericCellValue();
+			if (val == Math.floor(val) && !Double.isInfinite(val)) {
+				return java.math.BigDecimal.valueOf(val).toPlainString();
+			}
+			return String.valueOf(val);
+		} else if (type == CellType.STRING) {
+			return cell.getStringCellValue().trim();
+		}
+
+		return new org.apache.poi.ss.usermodel.DataFormatter().formatCellValue(cell).trim();
 	}
 
 	private void validatePhoto(MultipartFile photo) {
